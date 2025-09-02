@@ -1,9 +1,14 @@
+"use client"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
+import { useSearchParams } from "next/navigation"
 
 export default function AuthCodeErrorPage() {
+  const searchParams = useSearchParams()
+  const error = searchParams.get('error')
   return (
     <div className="page-container">
       <div className="mx-auto max-w-md">
@@ -22,6 +27,13 @@ export default function AuthCodeErrorPage() {
               The authentication link you used may be invalid or expired. 
               Please try signing in again.
             </p>
+            {error && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs font-mono text-muted-foreground">
+                  Error: {error}
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Link href="/auth/login" className="block">
                 <Button className="w-full">

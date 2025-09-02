@@ -15,20 +15,46 @@ import { useAuth } from "@/providers/auth-provider"
 export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const { signUp, signInWithProvider, error } = useAuth()
+
+  const passwordsMatch = confirmPassword && password === confirmPassword
+  const passwordsNoMatch = confirmPassword && password !== confirmPassword
+  const isPasswordValid = password.length >= 8
 
   const handleEmailSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
     setSuccess(false)
+    setValidationError(null)
     
-    const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
-    const firstName = formData.get('firstName') as string
-    const lastName = formData.get('lastName') as string
+    // Use state values instead of FormData since we have controlled inputs
     
-    const fullName = `${firstName} ${lastName}`.trim()
+    // Validation checks
+    if (password !== confirmPassword) {
+      setValidationError("Passwords don't match")
+      setIsLoading(false)
+      return
+    }
+
+    if (password.length < 8) {
+      setValidationError("Password must be at least 8 characters long")
+      setIsLoading(false)
+      return
+    }
+
+    if (!firstName.trim() || !lastName.trim()) {
+      setValidationError("Please enter both first and last name")
+      setIsLoading(false)
+      return
+    }
+    
+    const fullName = `${firstName.trim()} ${lastName.trim()}`
     
     try {
       await signUp(email, password, fullName)
@@ -102,10 +128,10 @@ export default function RegisterPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {error && (
+            {(error || validationError) && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{validationError || error}</AlertDescription>
               </Alert>
             )}
 
@@ -152,6 +178,8 @@ export default function RegisterPage() {
                   <Input 
                     id="firstName" 
                     name="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
                     placeholder="John" 
                     className="h-11"
                     required 
@@ -165,6 +193,8 @@ export default function RegisterPage() {
                   <Input 
                     id="lastName" 
                     name="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
                     placeholder="Doe" 
                     className="h-11"
                     required 
@@ -180,7 +210,9 @@ export default function RegisterPage() {
                 <Input 
                   id="email" 
                   name="email"
-                  type="email" 
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com" 
                   className="h-11"
                   required 
@@ -197,12 +229,15 @@ export default function RegisterPage() {
                   name="password"
                   type="password" 
                   placeholder="Create a strong password"
-                  className="h-11"
+                  className={`h-11 ${password && (isPasswordValid ? 'border-green-500' : 'border-red-500')}`}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required 
                   disabled={isLoading}
                 />
-                <div className="text-xs text-muted-foreground">
+                <div className={`text-xs ${password && isPasswordValid ? 'text-green-600' : 'text-muted-foreground'}`}>
                   Must be at least 8 characters long
+                  {password && isPasswordValid && " ✓"}
                 </div>
               </div>
               
@@ -215,10 +250,17 @@ export default function RegisterPage() {
                   name="confirmPassword"
                   type="password" 
                   placeholder="Confirm your password"
-                  className="h-11"
+                  className={`h-11 ${confirmPassword && (passwordsMatch ? 'border-green-500' : passwordsNoMatch ? 'border-red-500' : '')}`}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required 
                   disabled={isLoading}
                 />
+                {confirmPassword && (
+                  <div className={`text-xs ${passwordsMatch ? 'text-green-600' : 'text-red-600'}`}>
+                    {passwordsMatch ? "Passwords match ✓" : "Passwords don't match"}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -238,7 +280,7 @@ export default function RegisterPage() {
               <Button 
                 type="submit" 
                 className="w-full h-11 text-base font-medium shadow-sm hover:shadow-md transition-shadow"
-                disabled={isLoading}
+                disabled={isLoading || !isPasswordValid || passwordsNoMatch || !passwordsMatch}
               >
                 {isLoading ? 'Creating Account...' : 'Create Account'}
                 {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
