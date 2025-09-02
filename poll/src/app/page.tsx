@@ -3,8 +3,26 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, BarChart3, Users, Shield, Zap, Globe, TrendingUp } from "lucide-react"
+import { createClient } from "@/lib/supabase/server"
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient()
+
+  // Get real statistics from the database
+  const [
+    { count: totalPolls },
+    { count: activePolls },
+    { data: totalVotes },
+    { count: totalUsers }
+  ] = await Promise.all([
+    supabase.from('polls').select('*', { count: 'exact', head: true }),
+    supabase.from('polls').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('polls').select('total_votes'),
+    supabase.from('profiles').select('*', { count: 'exact', head: true })
+  ])
+
+  const totalVoteCount = totalVotes?.reduce((sum, poll) => sum + (poll.total_votes || 0), 0) || 0
+
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -55,20 +73,20 @@ export default function Home() {
         <div className="container">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             <div className="text-center animate-slide-up">
-              <div className="text-3xl font-bold lg:text-4xl">10K+</div>
+              <div className="text-3xl font-bold lg:text-4xl">{totalPolls || 0}</div>
               <div className="text-sm text-muted-foreground lg:text-base">Polls Created</div>
             </div>
             <div className="text-center animate-slide-up" style={{animationDelay: '0.1s'}}>
-              <div className="text-3xl font-bold lg:text-4xl">50K+</div>
+              <div className="text-3xl font-bold lg:text-4xl">{totalVoteCount || 0}</div>
               <div className="text-sm text-muted-foreground lg:text-base">Votes Cast</div>
             </div>
             <div className="text-center animate-slide-up" style={{animationDelay: '0.2s'}}>
-              <div className="text-3xl font-bold lg:text-4xl">99.9%</div>
-              <div className="text-sm text-muted-foreground lg:text-base">Uptime</div>
+              <div className="text-3xl font-bold lg:text-4xl">{activePolls || 0}</div>
+              <div className="text-sm text-muted-foreground lg:text-base">Active Polls</div>
             </div>
             <div className="text-center animate-slide-up" style={{animationDelay: '0.3s'}}>
-              <div className="text-3xl font-bold lg:text-4xl">24/7</div>
-              <div className="text-sm text-muted-foreground lg:text-base">Support</div>
+              <div className="text-3xl font-bold lg:text-4xl">{totalUsers || 0}</div>
+              <div className="text-sm text-muted-foreground lg:text-base">Users</div>
             </div>
           </div>
         </div>
