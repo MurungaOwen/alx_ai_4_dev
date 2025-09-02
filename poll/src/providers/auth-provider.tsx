@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
+import { authService } from "@/lib/auth/client"
 import { Profile } from "@/lib/supabase/types"
 
 interface AuthContextType {
@@ -66,8 +67,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = authService.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change event:', event, session?.user?.email)
+        
+        if (event === 'SIGNED_OUT') {
+          console.log('User signed out - clearing state')
+          setUser(null)
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+        
         if (session?.user) {
           setUser(session.user)
           await fetchProfile(session.user.id)
@@ -87,19 +98,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       setError(null)
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const { user, error } = await authService.signIn(email, password)
 
-      if (error) throw error
+      if (error) {
+        setError(error.message)
+        throw new Error(error.message)
+      }
 
-      if (data.user) {
-        await fetchProfile(data.user.id)
-        router.push('/')
+      if (user) {
+        setUser(user)
+        await fetchProfile(user.id)
+        
+        // Handle redirect parameter from URL
+        const urlParams = new URLSearchParams(window.location.search)
+        const redirect = urlParams.get('redirect')
+        
+        if (redirect && redirect.startsWith('/')) {
+          router.push(redirect)
+        } else {
+          router.push('/')
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in')
+      console.error('Sign in error:', err)
       throw err
     }
   }
@@ -107,22 +128,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
       setError(null)
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            full_name: fullName,
-          },
-        },
-      })
+      const { user, error } = await authService.signUp(email, password, { full_name: fullName })
 
-      if (error) throw error
+      if (error) {
+        setError(error.message)
+        throw new Error(error.message)
+      }
 
-      return data
+      return { user }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign up')
+      console.error('Sign up error:', err)
       throw err
     }
   }
@@ -130,31 +145,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setError(null)
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      console.log('Auth Provider - Starting sign out...')
       
+      // Use centralized auth service
+      const { error } = await authService.signOut()
+      
+      if (error) {
+        console.error('Auth Provider - Sign out error:', error)
+        setError(error.message)
+      }
+      
+      console.log('Auth Provider - Clearing local state...')
+      
+      // Clear local state immediately
       setUser(null)
       setProfile(null)
-      router.push('/auth/login')
+      setLoading(false)
+      
+      console.log('Auth Provider - Redirecting to login...')
+      // Use window.location for hard redirect to ensure clean state
+      window.location.href = '/auth/login'
     } catch (err: any) {
+      console.error('Auth Provider - Sign out failed:', err)
       setError(err.message || 'Failed to sign out')
-      throw err
+      
+      // Even if sign out fails, clear local state and redirect
+      setUser(null)
+      setProfile(null)
+      setLoading(false)
+      window.location.href = '/auth/login'
     }
   }
 
   const signInWithProvider = async (provider: 'github' | 'google') => {
     try {
       setError(null)
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+      
+      // Handle redirect parameter
+      const urlParams = new URLSearchParams(window.location.search)
+      const redirect = urlParams.get('redirect')
+      
+      const { error } = await authService.signInWithProvider(provider, redirect || undefined)
 
-      if (error) throw error
+      if (error) {
+        setError(error.message)
+        throw new Error(error.message)
+      }
     } catch (err: any) {
-      setError(err.message || `Failed to sign in with ${provider}`)
+      console.error(`Sign in with ${provider} error:`, err)
       throw err
     }
   }
