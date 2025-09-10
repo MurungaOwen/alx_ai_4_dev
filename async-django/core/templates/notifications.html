@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Notifications</title>
+</head>
+<body>
+    <h1>Notifications</h1>
+    <ul id="notifications">
+    </ul>
+
+    <script>
+        const notificationSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + '/ws/notifications/'
+        );
+
+        notificationSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const message = data.message;
+            const notificationList = document.getElementById('notifications');
+            const newNotification = document.createElement('li');
+            newNotification.appendChild(document.createTextNode(message));
+            notificationList.appendChild(newNotification);
+        };
+
+        notificationSocket.onclose = function(e) {
+            console.error('Notification socket closed unexpectedly');
+        };
+    </script>
+</body>
+</html>
