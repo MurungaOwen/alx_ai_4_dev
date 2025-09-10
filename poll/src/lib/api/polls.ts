@@ -20,10 +20,12 @@ export interface CreatePollData {
 }
 
 export async function createPoll(pollData: CreatePollData) {
-  const supabase = createClient()
-  const user = await getCurrentUser()
+  const supabase = await createClient()
+  
+  // Get user directly from supabase client
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (!user) {
+  if (authError || !user) {
     return { error: 'Authentication required' }
   }
 
@@ -102,7 +104,7 @@ export async function getPolls(options?: {
   limit?: number
   offset?: number
 }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   let query = supabase
     .from('polls')
@@ -146,8 +148,10 @@ export async function getPolls(options?: {
 }
 
 export async function getPoll(id: string) {
-  const supabase = createClient()
-  const user = await getCurrentUser()
+  const supabase = await createClient()
+  
+  // Get user directly from supabase client
+  const { data: { user } } = await supabase.auth.getUser()
 
   const { data: poll, error } = await supabase
     .from('polls')
@@ -197,8 +201,10 @@ export async function getPoll(id: string) {
 }
 
 export async function vote(pollId: string, optionId: string) {
-  const supabase = createClient()
-  const user = await getCurrentUser()
+  const supabase = await createClient()
+  
+  // Get user directly from supabase client
+  const { data: { user } } = await supabase.auth.getUser()
 
   // Get poll details first
   const { data: poll, error: pollError } = await supabase
@@ -250,10 +256,13 @@ export async function vote(pollId: string, optionId: string) {
 }
 
 export async function deletePoll(pollId: string) {
-  const supabase = createClient()
-  const user = await getCurrentUser()
+  const supabase = await createClient()
+  
+  // Get user directly from supabase client
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (!user) {
+  if (authError || !user) {
+    console.error('Auth error in deletePoll:', authError)
     return { error: 'Authentication required' }
   }
 
@@ -287,10 +296,13 @@ export async function deletePoll(pollId: string) {
 }
 
 export async function updatePollStatus(pollId: string, status: 'active' | 'closed' | 'archived') {
-  const supabase = createClient()
-  const user = await getCurrentUser()
+  const supabase = await createClient()
+  
+  // Get user directly from supabase client
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (!user) {
+  if (authError || !user) {
+    console.error('Auth error in updatePollStatus:', authError)
     return { error: 'Authentication required' }
   }
 
@@ -324,7 +336,7 @@ export async function updatePollStatus(pollId: string, status: 'active' | 'close
 }
 
 export async function getCategories() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: categories, error } = await supabase
     .from('categories')
@@ -337,4 +349,93 @@ export async function getCategories() {
   }
 
   return { success: true, data: categories }
+}
+
+export async function createPollWithForm(formData: FormData) {
+  const supabase = await createClient()
+  
+  // Get data from form
+  const title = formData.get('title') as string
+  const description = formData.get('description') as string
+  const categoryId = formData.get('categoryId') as string
+  const options = JSON.parse(formData.get('options') as string)
+  const allowAnonymous = formData.get('allowAnonymous') === 'true'
+  const allowMultipleVotes = formData.get('allowMultipleVotes') === 'true'
+  const clientUserId = formData.get('userId') as string
+
+  // Validate client-provided user ID against server session
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'Authentication required' }
+  }
+
+  if (user.id !== clientUserId) {
+    return { error: 'Authentication mismatch' }
+  }
+
+  // Validate input
+  if (!title?.trim()) {
+    return { error: 'Poll title is required' }
+  }
+
+  if (!options || options.length < 2) {
+    return { error: 'At least 2 options are required' }
+  }
+
+  if (options.some((opt: string) => !opt.trim())) {
+    return { error: 'All options must have text' }
+  }
+
+  try {
+    // Create poll
+    const pollInsert: PollInsert = {
+      title: title.trim(),
+      description: description?.trim() || null,
+      creator_id: user.id,
+      category_id: categoryId || null,
+      status: 'active',
+      vote_type: allowMultipleVotes ? 'multiple' : 'single',
+      allow_anonymous: allowAnonymous ?? true,
+      allow_multiple_votes: allowMultipleVotes ?? false,
+      expires_at: null,
+    }
+
+    const { data: poll, error: pollError } = await supabase
+      .from('polls')
+      .insert(pollInsert)
+      .select()
+      .single()
+
+    if (pollError) {
+      console.error('Create poll error:', pollError)
+      return { error: 'Failed to create poll' }
+    }
+
+    // Create poll options
+    const optionsInsert: PollOptionInsert[] = options
+      .filter((opt: string) => opt.trim())
+      .map((option: string, index: number) => ({
+        poll_id: poll.id,
+        text: option.trim(),
+        position: index,
+      }))
+
+    const { error: optionsError } = await supabase
+      .from('poll_options')
+      .insert(optionsInsert)
+
+    if (optionsError) {
+      console.error('Create options error:', optionsError)
+      // Clean up poll if options failed
+      await supabase.from('polls').delete().eq('id', poll.id)
+      return { error: 'Failed to create poll options' }
+    }
+
+    revalidatePath('/polls')
+    return { success: true, data: poll }
+  } catch (error) {
+    console.error('Create poll error:', error)
+    return { error: 'Failed to create poll' }
+  }
 }

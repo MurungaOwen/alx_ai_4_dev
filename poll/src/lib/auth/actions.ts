@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 export async function signUp(formData: FormData) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const firstName = formData.get('firstName') as string
   const lastName = formData.get('lastName') as string
@@ -38,7 +38,7 @@ export async function signUp(formData: FormData) {
 }
 
 export async function signIn(formData: FormData) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -58,7 +58,7 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signOut() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { error } = await supabase.auth.signOut()
 
@@ -72,7 +72,7 @@ export async function signOut() {
 }
 
 export async function signInWithProvider(provider: 'github' | 'google') {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
@@ -92,7 +92,7 @@ export async function signInWithProvider(provider: 'github' | 'google') {
 }
 
 export async function resetPassword(email: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password`,
@@ -110,7 +110,14 @@ export async function resetPassword(email: string) {
 }
 
 export async function updatePassword(newPassword: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
+
+  // Verify user is authenticated first
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    console.error('Auth error in updatePassword:', authError)
+    return { error: 'Authentication required' }
+  }
 
   const { error } = await supabase.auth.updateUser({
     password: newPassword
@@ -125,7 +132,7 @@ export async function updatePassword(newPassword: string) {
 }
 
 export async function getCurrentUser() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user }, error } = await supabase.auth.getUser()
 
@@ -138,7 +145,7 @@ export async function getCurrentUser() {
 }
 
 export async function getProfile(userId?: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   // If no userId provided, get current user
   if (!userId) {
@@ -166,10 +173,13 @@ export async function updateProfile(profileData: {
   bio?: string
   avatar_url?: string
 }) {
-  const supabase = createClient()
-  const user = await getCurrentUser()
+  const supabase = await createClient()
+  
+  // Get user directly from supabase client
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-  if (!user) {
+  if (authError || !user) {
+    console.error('Auth error in updateProfile:', authError)
     return { error: 'Not authenticated' }
   }
 

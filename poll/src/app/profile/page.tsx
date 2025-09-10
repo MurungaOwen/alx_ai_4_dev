@@ -12,18 +12,22 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { User, Mail, Calendar, BarChart3, FileText, TrendingUp, CheckCircle, AlertCircle, Edit3 } from "lucide-react"
+import { User, Mail, Calendar, BarChart3, FileText, TrendingUp, CheckCircle, AlertCircle, Edit3, Vote } from "lucide-react"
 import { useAuth } from "@/providers/auth-provider"
 import { updateProfile } from "@/lib/auth/actions"
 import { getPolls } from "@/lib/api/polls"
+import { getUserStats, type UserStats } from "@/lib/api/user"
+import { VotingActivity } from "@/components/profile/voting-activity"
 
 export default function ProfilePage() {
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile, invalidateUserStats, statsInvalidated } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [userPolls, setUserPolls] = useState<any[]>([])
   const [pollsLoading, setPollsLoading] = useState(true)
+  const [userStats, setUserStats] = useState<UserStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
@@ -43,7 +47,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadUserPolls()
+    loadUserStats()
   }, [user])
+
+  // Refresh stats when invalidated (e.g., after voting)
+  useEffect(() => {
+    if (statsInvalidated > 0) {
+      loadUserStats()
+    }
+  }, [statsInvalidated])
 
   const loadUserPolls = async () => {
     if (!user) return
@@ -57,6 +69,21 @@ export default function ProfilePage() {
       console.error('Failed to load user polls:', error)
     } finally {
       setPollsLoading(false)
+    }
+  }
+
+  const loadUserStats = async () => {
+    if (!user) return
+    
+    try {
+      const result = await getUserStats()
+      if (result.success && result.data) {
+        setUserStats(result.data)
+      }
+    } catch (error) {
+      console.error('Failed to load user stats:', error)
+    } finally {
+      setStatsLoading(false)
     }
   }
 
@@ -102,8 +129,9 @@ export default function ProfilePage() {
     .toUpperCase()
     .slice(0, 2)
 
-  const totalVotes = userPolls.reduce((sum, poll) => sum + (poll.total_votes || 0), 0)
+  const totalVotesReceived = userStats?.total_votes_received || 0
   const activePolls = userPolls.filter(poll => poll.status === 'active').length
+  const votesCast = userStats?.votes_cast || 0
 
   return (
     <ProtectedRoute>
@@ -284,84 +312,117 @@ export default function ProfilePage() {
 
             <TabsContent value="activity" className="space-y-6">
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 <Card className="text-center p-4 glass-effect animate-slide-up">
                   <div className="flex items-center justify-center mb-2">
-                    <FileText className="h-8 w-8 text-primary" />
+                    <FileText className="h-6 w-6 text-primary" />
                   </div>
-                  <div className="text-2xl font-bold">{userPolls.length}</div>
-                  <div className="text-sm text-muted-foreground">Total Polls</div>
+                  <div className="text-xl font-bold">
+                    {statsLoading ? '-' : userPolls.length}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Polls Created</div>
                 </Card>
                 <Card className="text-center p-4 glass-effect animate-slide-up" style={{animationDelay: '0.1s'}}>
                   <div className="flex items-center justify-center mb-2">
-                    <TrendingUp className="h-8 w-8 text-green-600" />
+                    <TrendingUp className="h-6 w-6 text-green-600" />
                   </div>
-                  <div className="text-2xl font-bold">{activePolls}</div>
-                  <div className="text-sm text-muted-foreground">Active Polls</div>
+                  <div className="text-xl font-bold">
+                    {statsLoading ? '-' : activePolls}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Active Polls</div>
                 </Card>
                 <Card className="text-center p-4 glass-effect animate-slide-up" style={{animationDelay: '0.2s'}}>
                   <div className="flex items-center justify-center mb-2">
-                    <BarChart3 className="h-8 w-8 text-blue-600" />
+                    <BarChart3 className="h-6 w-6 text-blue-600" />
                   </div>
-                  <div className="text-2xl font-bold">{totalVotes}</div>
-                  <div className="text-sm text-muted-foreground">Total Votes</div>
+                  <div className="text-xl font-bold">
+                    {statsLoading ? '-' : totalVotesReceived}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Votes Received</div>
+                </Card>
+                <Card className="text-center p-4 glass-effect animate-slide-up" style={{animationDelay: '0.3s'}}>
+                  <div className="flex items-center justify-center mb-2">
+                    <Vote className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div className="text-xl font-bold">
+                    {statsLoading ? '-' : votesCast}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Votes Cast</div>
                 </Card>
               </div>
 
-              {/* Recent Polls */}
-              <Card className="border-2 glass-effect animate-slide-up" style={{animationDelay: '0.3s'}}>
-                <CardHeader>
-                  <CardTitle>Your Recent Polls</CardTitle>
-                  <CardDescription>
-                    Polls you've created recently
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {pollsLoading ? (
-                    <div className="space-y-3">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="animate-pulse flex items-center space-x-4">
-                          <div className="h-4 bg-muted rounded w-full"></div>
-                          <div className="h-4 bg-muted rounded w-20"></div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : userPolls.length > 0 ? (
-                    <div className="space-y-4">
-                      {userPolls.map((poll) => (
-                        <div key={poll.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                          <div className="flex-1">
-                            <h4 className="font-medium">{poll.title}</h4>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {poll.total_votes} votes • Created {new Date(poll.created_at).toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'short', 
-                                day: 'numeric' 
-                              })}
-                            </p>
+              {/* Activity Sections */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Voting Activity */}
+                <div className="animate-slide-up" style={{animationDelay: '0.4s'}}>
+                  <VotingActivity />
+                </div>
+                
+                {/* Created Polls */}
+                <Card className="border-2 glass-effect animate-slide-up" style={{animationDelay: '0.5s'}}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Your Recent Polls
+                    </CardTitle>
+                    <CardDescription>
+                      Polls you've created recently
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {pollsLoading ? (
+                      <div className="space-y-3">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="animate-pulse flex items-center space-x-4">
+                            <div className="h-4 bg-muted rounded w-full"></div>
+                            <div className="h-4 bg-muted rounded w-20"></div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={poll.status === 'active' ? 'default' : 'secondary'}>
-                              {poll.status}
-                            </Badge>
-                            <Button variant="ghost" size="sm" asChild>
-                              <a href={`/polls/${poll.id}`}>View</a>
+                        ))}
+                      </div>
+                    ) : userPolls.length > 0 ? (
+                      <div className="space-y-4">
+                        {userPolls.slice(0, 5).map((poll) => (
+                          <div key={poll.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+                            <div className="flex-1">
+                              <h4 className="font-medium">{poll.title}</h4>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {poll.total_votes} votes • Created {new Date(poll.created_at).toLocaleDateString('en-US', { 
+                                  year: 'numeric', 
+                                  month: 'short', 
+                                  day: 'numeric' 
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={poll.status === 'active' ? 'default' : 'secondary'}>
+                                {poll.status}
+                              </Badge>
+                              <Button variant="ghost" size="sm" asChild>
+                                <Link href={`/polls/${poll.id}`}>View</Link>
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        {userPolls.length > 5 && (
+                          <div className="text-center pt-2">
+                            <Button variant="outline" size="sm" asChild>
+                              <Link href="/polls?creator=me">View All Polls</Link>
                             </Button>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>You haven't created any polls yet.</p>
-                      <Button asChild className="mt-4">
-                        <a href="/polls/create">Create Your First Poll</a>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>You haven't created any polls yet.</p>
+                        <Button asChild className="mt-4">
+                          <Link href="/polls/create">Create Your First Poll</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>

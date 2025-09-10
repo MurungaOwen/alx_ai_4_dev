@@ -17,6 +17,8 @@ interface AuthContextType {
   signOut: () => Promise<void>
   signInWithProvider: (provider: 'github' | 'google') => Promise<void>
   refreshProfile: () => Promise<void>
+  invalidateUserStats: () => void
+  statsInvalidated: number
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -26,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [statsInvalidated, setStatsInvalidated] = useState(0)
   const router = useRouter()
 
   // Fetch user profile
@@ -203,6 +206,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const invalidateUserStats = () => {
+    setStatsInvalidated(prev => prev + 1)
+  }
+
   const value = {
     user,
     profile,
@@ -213,6 +220,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     signInWithProvider,
     refreshProfile,
+    invalidateUserStats,
+    statsInvalidated,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

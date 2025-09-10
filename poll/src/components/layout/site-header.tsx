@@ -34,27 +34,7 @@ export function SiteHeader() {
         
         {/* Desktop Auth */}
         <div className="hidden md:flex items-center space-x-3">
-          {loading ? (
-            <div className="flex space-x-3">
-              <div className="h-9 w-16 bg-muted/50 animate-pulse rounded" />
-              <div className="h-9 w-20 bg-muted/50 animate-pulse rounded" />
-            </div>
-          ) : user ? (
-            <UserNav />
-          ) : (
-            <>
-              <Link href="/auth/login">
-                <Button variant="ghost" size="sm" className="font-medium">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/auth/register">
-                <Button size="sm" className="font-medium shadow-sm hover:shadow-md transition-shadow">
-                  Get Started
-                </Button>
-              </Link>
-            </>
-          )}
+          <UserNav />
         </div>
 
         {/* Mobile Navigation */}
@@ -102,30 +82,10 @@ export function SiteHeader() {
                 </nav>
                 
                 <div className="border-t pt-8">
-                  {loading ? (
-                    <div className="space-y-3">
-                      <div className="h-10 bg-muted/50 animate-pulse rounded" />
-                      <div className="h-10 bg-muted/50 animate-pulse rounded" />
-                    </div>
-                  ) : user ? (
-                    <div className="space-y-4">
-                      <div className="text-sm text-muted-foreground">Account</div>
-                      <UserNav />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col space-y-3">
-                      <Link href="/auth/login" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full justify-start">
-                          Sign In
-                        </Button>
-                      </Link>
-                      <Link href="/auth/register" onClick={() => setIsOpen(false)}>
-                        <Button className="w-full justify-start">
-                          Get Started
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
+                  <div className="space-y-4">
+                    {user && <div className="text-sm text-muted-foreground">Account</div>}
+                    <UserNav mobile onNavigate={() => setIsOpen(false)} />
+                  </div>
                 </div>
               </div>
             </SheetContent>
